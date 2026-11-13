@@ -54,7 +54,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            n_ctx: 2048,
+            n_ctx: 16384,
             n_gpu_layers: 12,
             temperature: 0.7,
             max_new_tokens: 1024,

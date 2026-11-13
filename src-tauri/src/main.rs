@@ -76,12 +76,8 @@ fn main() {
             // 注入共享状态。
             app.manage(AppState::new(data_dir.clone()));
 
-            // 本地 API 控制状态；默认随程序启动开启（可在界面里关闭/再开启）。
-            let api_control = api_server::ApiControl::new();
-            if let Err(e) = api_control.start(app.handle().clone()) {
-                log::warn!("本地 API 启动失败: {}", e);
-            }
-            app.manage(api_control);
+            // 本地 API 控制状态：默认不启动，由界面上的开关手动开启。
+            app.manage(api_server::ApiControl::new());
 
             log::info!("TauriGGUFChat initialized, base_dir = {:?}", data_dir);
             Ok(())

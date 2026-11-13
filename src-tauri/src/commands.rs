@@ -407,14 +407,26 @@ pub(crate) fn run_generation(
     stop_flag: &AtomicBool,
     on_token: &mut dyn FnMut(&str) -> Result<(), String>,
 ) -> Result<String, String> {
+    let prompt = build_chatml_prompt(history);
+    run_generation_with_prompt(model_slot, &prompt, params, stop_flag, on_token)
+}
+
+/// 以给定原始 prompt 生成（本地 HTTP API 使用：自行组装 ChatML 并注入 tools）。
+/// 桌面端聊天仍走 `run_generation`（内部复用本函数），行为不变。
+pub(crate) fn run_generation_with_prompt(
+    model_slot: &Mutex<Option<LlamaModel>>,
+    prompt: &str,
+    params: &InferenceParams,
+    stop_flag: &AtomicBool,
+    on_token: &mut dyn FnMut(&str) -> Result<(), String>,
+) -> Result<String, String> {
     // ---- ① 取已加载模型（未加载直接报错） ----
     let guard = model_slot.lock().map_err(|_| "模型锁已损坏".to_string())?;
     let model = guard
         .as_ref()
         .ok_or_else(|| "尚未加载模型，请先加载模型".to_string())?;
 
-    // ---- ② 组装 ChatML 上下文 ----
-    let prompt = build_chatml_prompt(history);
+    // ---- ② 分词 ----
     // add_special=true 补 BOS，parse_special=true 解析 <|im_start|> 等特殊标记。
     let mut tokens = model.vocab().tokenize(prompt.as_bytes(), true, true);
     // 关键修复：ChatML 模板以 `{{- bos_token }}`（即 <s>）开头，
@@ -429,7 +441,8 @@ pub(crate) fn run_generation(
         return Err("提示词分词结果为空".to_string());
     }
 
-    let n_ctx = params.n_ctx.max(256);
+    // n_ctx 不得超过模型训练上限：过大时 KV 缓存分配会失败甚至直接 abort。
+    let n_ctx = params.n_ctx.max(256).min(model.n_ctx_train().max(256));
     if tokens.len() >= n_ctx as usize {
         return Err(format!(
             "上下文不足：提示词 {} tokens 已超过 n_ctx={}，请减少对话历史或调大上下文",
