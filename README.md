@@ -12,7 +12,7 @@
 
 ## 使用
 
-1. 下载 `TauriGGUFChat-v0.1.1-windows-x64.exe`，放到任意一个有写权限的文件夹
+1. 下载 `TauriGGUFChat-v0.1.2-windows-x64.exe`，放到任意一个有写权限的文件夹
 2. 双击运行（首次启动会在 exe 旁生成 `data\` 目录）
 3. 点击「导入 GGUF」，选择本地模型文件；程序会复制一份到 `data\models\`
 4. 在下拉框选中模型 → 「加载选中模型」
@@ -31,6 +31,28 @@ data\
 ```
 
 如果 exe 所在目录不可写（例如放进 `Program Files`），程序会自动回退到 `%APPDATA%\com.tauriggufchat.app`。
+
+## 本地 HTTP API
+
+程序启动后会在 `127.0.0.1:18080` 提供 OpenAI 兼容接口，供本机其他程序（脚本、插件、其他客户端）调用当前已加载的模型。只监听本机回环地址，不对局域网/外网开放。
+
+| 接口 | 说明 |
+|---|---|
+| `GET /health` | 健康检查 |
+| `GET /v1/models` | 列出模型库中的模型（与界面同源） |
+| `POST /v1/chat/completions` | 对话，支持 `stream: true`（SSE）与 `stream: false` |
+
+```bash
+curl http://127.0.0.1:18080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d "{\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}],\"stream\":false}"
+```
+
+说明：
+
+- 需先在桌面端「加载选中模型」，API 与界面共用同一个模型实例
+- 同一时间只处理一个生成请求，桌面端生成中调用会返回 `429`
+- 请求中的 `temperature` / `top_p` / `max_tokens` 可覆盖当前配置，`model` 字段仅回显
 
 ## 系统要求
 

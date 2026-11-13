@@ -4,6 +4,7 @@
 // 打包为 Windows 桌面应用时隐藏控制台窗口（仅 release 构建生效）。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod api_server;
 mod commands;
 mod fs_service;
 mod types;
@@ -66,6 +67,9 @@ fn main() {
 
             // 注入共享状态。
             app.manage(AppState::new(data_dir.clone()));
+
+            // 启动本地 OpenAI 兼容 HTTP API（127.0.0.1:18080）。
+            api_server::spawn(app.handle().clone());
 
             log::info!("TauriGGUFChat initialized, base_dir = {:?}", data_dir);
             Ok(())

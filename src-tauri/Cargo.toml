@@ -1,6 +1,6 @@
 [package]
 name = "tauri-gguf-chat"
-version = "0.1.1"
+version = "0.1.2"
 description = "TauriGGUFChat - Local GGUF chat client"
 edition = "2021"
 rust-version = "1.70"
@@ -16,7 +16,12 @@ serde_json = "1"
 log = "0.4"
 env_logger = "0.11"
 rfd = "0.15"
-tokio = { version = "1", features = ["rt"] }
+tokio = { version = "1", features = ["rt", "net", "time", "io-util", "sync", "macros"] }
+
+# ===== 本地 HTTP API（OpenAI 兼容）=====
+axum = "0.7"
+tokio-stream = { version = "0.1", features = ["sync"] }
+tower-http = { version = "0.5", features = ["cors"] }
 # 阶段5：会话 id 生成（UUID v4）。
 uuid = { version = "1", features = ["v4"] }
 

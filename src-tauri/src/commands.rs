@@ -346,7 +346,8 @@ pub async fn send_chat(
     let worker_app = app.clone();
 
     let joined = tokio::task::spawn_blocking(move || {
-        run_generation(&worker_app, &model_slot, &history, &params, &stop_flag)
+        let mut sink = |delta: &str| emit_token(&worker_app, delta);
+        run_generation(&model_slot, &history, &params, &stop_flag, &mut sink)
     })
     .await;
 
@@ -398,12 +399,13 @@ pub async fn stop_generation(state: State<'_, AppState>) -> Result<(), String> {
 /// 阶段4：采样主循环（运行在阻塞线程）。
 /// 流程：取模型 -> 组装 ChatML prompt -> 分词 -> 建上下文 -> prompt 解码 -> 逐 token 采样并推送。
 /// 注意：整个生成期间持有模型锁，保证 llama 实例唯一。
-fn run_generation(
-    app: &AppHandle,
+/// `on_token`：增量文本回调（桌面端用于推送 chat_token 事件，本地 HTTP API 用于 SSE 输出）。
+pub(crate) fn run_generation(
     model_slot: &Mutex<Option<LlamaModel>>,
     history: &[ChatMessage],
     params: &InferenceParams,
     stop_flag: &AtomicBool,
+    on_token: &mut dyn FnMut(&str) -> Result<(), String>,
 ) -> Result<String, String> {
     // ---- ① 取已加载模型（未加载直接报错） ----
     let guard = model_slot.lock().map_err(|_| "模型锁已损坏".to_string())?;
@@ -513,7 +515,7 @@ fn run_generation(
             if raw.len() > emitted {
                 let delta = raw[emitted..].to_string();
                 emitted = raw.len();
-                emit_token(app, &delta)?;
+                on_token(&delta)?;
             }
             break;
         }
@@ -526,7 +528,7 @@ fn run_generation(
         if safe_end > emitted {
             let delta = raw[emitted..safe_end].to_string();
             emitted = safe_end;
-            emit_token(app, &delta)?;
+            on_token(&delta)?;
         }
 
         // 把新 token 送回上下文解码，为下一次采样准备 logits。
@@ -547,10 +549,9 @@ fn run_generation(
     if end > emitted {
         let delta = raw[emitted..end].to_string();
         emitted = end;
-        emit_token(app, &delta)?;
+        on_token(&delta)?;
     }
-    let full_text = raw[..emitted].to_string();
-    log::info!("生成完成，共 {} 字符", full_text.chars().count());
+    let full_text = raw[..emitted].to_string();    log::info!("生成完成，共 {} 字符", full_text.chars().count());
     Ok(full_text)
 }
 
