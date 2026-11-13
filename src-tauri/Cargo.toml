@@ -1,0 +1,45 @@
+[package]
+name = "tauri-gguf-chat"
+version = "0.1.0"
+description = "TauriGGUFChat - Local GGUF chat client"
+edition = "2021"
+rust-version = "1.70"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+env_logger = "0.11"
+rfd = "0.15"
+tokio = { version = "1", features = ["rt"] }
+# 阶段5：会话 id 生成（UUID v4）。
+uuid = { version = "1", features = ["v4"] }
+
+# ===== 阶段3：llama.cpp 绑定 =====
+# 说明：
+#   - 默认 feature 为 cpu（纯 CPU 构建，编译快，用于日常调试）。
+#   - 可选 feature 为 cuda（编译 CUDA 后端，GGML_CUDA=ON）。
+#   - 编译 CUDA 版本指令：  cargo tauri build --features cuda
+#     普通 CPU 调试版本直接： cargo tauri dev   （默认已启用 cpu feature）
+# 使用上游 main 分支源码（本地 vendored 到 third_party/llama-cpp-rs，版本 0.1.162）：
+# crates.io 最新发布 0.1.161（2026-11-03）内置的 llama.cpp 尚不支持
+# general.architecture = "lfm3"，加载 LFM3 系列 GGUF 会返回 null。
+# 上游 main 已将 llama.cpp 子模块更新到提交 cd959ba（已支持 lfm3）。
+# 说明：用 git 依赖时 cargo 拉取大体积子模块会卡住，故改为本地路径依赖；
+# 待 0.1.162 在 crates.io 发布后可改回版本号依赖并删除 third_party。
+# 本代码基于较新的 API：
+#   LlamaBackend::init() + LlamaModel::load_from_file(&backend, path, &params)
+llama-cpp-2 = { path = "../third_party/llama-cpp-rs/llama-cpp-2", default-features = false }
+
+[features]
+# 默认 feature：cpu（纯 CPU 构建，日常调试使用）。
+default = ["cpu"]
+cpu = []
+# 可选 feature：cuda，编译 CUDA 后端（GGML_CUDA=ON）。
+# 构建指令：cargo tauri build --features cuda
+cuda = ["llama-cpp-2/cuda"]

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TauriGGUFChat</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 最左侧：会话侧边栏（阶段5） -->
+  <aside id="session-sidebar">
+    <div id="session-header">
+      <h2>会话</h2>
+      <button id="btn-new-session" class="btn btn-primary">新建会话</button>
+    </div>
+    <div id="session-list"></div>
+  </aside>
+
+  <!-- 左侧：模型控制面板 -->
+  <aside id="sidebar">
+    <h2>模型控制</h2>
+
+    <!-- 模型选择 -->
+    <label for="model-select">已导入模型</label>
+    <select id="model-select">
+      <option value="">（暂无模型，请先导入）</option>
+    </select>
+
+    <!-- 模型操作按钮 -->
+    <div id="model-actions">
+      <button id="btn-import" class="btn btn-primary">导入 GGUF</button>
+      <button id="btn-load" class="btn">加载选中模型</button>
+      <button id="btn-unload" class="btn">卸载模型</button>
+      <button id="btn-delete" class="btn btn-danger">删除选中模型</button>
+    </div>
+
+    <hr />
+
+    <!-- 推理参数配置区 -->
+    <h3>推理参数</h3>
+    <div id="params">
+      <label for="p-ctx">n_ctx（上下文）</label>
+      <input id="p-ctx" type="number" min="256" step="256" value="2048" />
+
+      <label for="p-gpu">n_gpu_layers（GPU 层数）</label>
+      <input id="p-gpu" type="number" min="0" value="12" />
+
+      <label for="p-temp">temperature（温度）</label>
+      <input id="p-temp" type="number" min="0" max="2" step="0.05" value="0.7" />
+
+      <label for="p-max">max_new_tokens（最大生成数）</label>
+      <input id="p-max" type="number" min="16" step="16" value="1024" />
+
+      <label for="p-topp">top_p（核采样）</label>
+      <input id="p-topp" type="number" min="0" max="1" step="0.01" value="0.95" />
+    </div>
+
+    <button id="btn-save-config" class="btn">保存参数到配置</button>
+
+    <!-- 底部状态文本（阶段5补齐该节点，供 app.js 的 setStatus 使用） -->
+    <div id="status"></div>
+  </aside>
+
+  <!-- 右侧：聊天区域 -->
+  <main id="chat-pane">
+    <!-- 滚动聊天容器 -->
+    <div id="chat-history">
+      <div class="chat-placeholder">开始对话前，请先导入并加载一个 GGUF 模型。</div>
+    </div>
+
+    <!-- 底部输入区 -->
+    <div id="chat-input-bar">
+      <textarea id="chat-input" rows="2" placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <button id="btn-send" class="btn btn-primary">发送</button>
+      <button id="btn-stop" class="btn btn-danger" disabled>停止生成</button>
+    </div>
+  </main>
+
+  <!-- 全屏加载提示（必须在 app.js 之前，否则脚本取不到该节点） -->
+  <div id="busy-overlay"><div class="box"></div></div>
+
+  <!-- Tauri v2 会自动注入全局 window.__TAURI__，前端直接调用，无需 npm 打包或 CDN -->
+  <script src="app.js"></script>
+</body>
+</html>

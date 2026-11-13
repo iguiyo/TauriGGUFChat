@@ -1,0 +1,19 @@
+# 编译产物
+src-tauri/target/
+dist/
+*.pdb
+*.exe
+
+# 上游 vendored 依赖（体积大，克隆后需单独拉取，见提交说明）
+third_party/
+
+# 运行时数据（模型与配置不随源码发布）
+models/
+chat_history/
+config.json
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
