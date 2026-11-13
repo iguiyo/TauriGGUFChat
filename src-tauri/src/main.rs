@@ -11,6 +11,24 @@ mod types;
 use commands::AppState;
 use tauri::Manager;
 
+/// 解析数据目录（便携模式）：固定为 exe 同级目录下的 `data` 文件夹，
+/// 模型 / 会话 / 配置都写在这里，拷贝整个程序文件夹即可完整迁移。
+/// 若该位置不可写（例如程序被放进 Program Files，普通权限无法创建目录），
+/// 回退到系统应用数据目录，保证程序仍能启动。
+fn resolve_data_dir(app: &tauri::App) -> std::path::PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let portable = parent.join("data");
+            if std::fs::create_dir_all(&portable).is_ok() {
+                return portable;
+            }
+        }
+    }
+    app.path()
+        .app_data_dir()
+        .expect("无法解析应用数据目录")
+}
+
 fn main() {
     env_logger::init();
     log::info!("TauriGGUFChat starting (stage 5)");
@@ -19,11 +37,8 @@ fn main() {
         // 文件选择对话框插件。
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // 解析应用数据目录作为基础目录，并在其中补齐目录结构。
-            let data_dir = app
-                .path()
-                .app_data_dir()
-                .expect("无法解析应用数据目录");
+            // 便携模式：数据目录取 exe 同级的 data 目录，并在其中补齐目录结构。
+            let data_dir = resolve_data_dir(app);
             std::fs::create_dir_all(data_dir.join("models"))
                 .expect("无法创建 models 目录");
             std::fs::create_dir_all(data_dir.join("chat_history"))
@@ -50,12 +65,9 @@ fn main() {
             }
 
             // 注入共享状态。
-            app.manage(AppState::new(data_dir));
+            app.manage(AppState::new(data_dir.clone()));
 
-            log::info!(
-                "TauriGGUFChat initialized, base_dir = {:?}",
-                app.path().app_data_dir().unwrap()
-            );
+            log::info!("TauriGGUFChat initialized, base_dir = {:?}", data_dir);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
