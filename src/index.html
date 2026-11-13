@@ -59,6 +59,19 @@
 
     <button id="btn-save-config" class="btn">保存参数到配置</button>
 
+    <hr />
+
+    <!-- 本地 API 控制区：显示运行状态，支持开启/关闭 -->
+    <h3>本地 API</h3>
+    <div id="api-panel">
+      <div id="api-row">
+        <span id="api-state" class="api-badge off">已关闭</span>
+        <button id="btn-api-toggle" class="btn">开启 API</button>
+      </div>
+      <div id="api-base-url" class="hint">http://127.0.0.1:18080/v1</div>
+      <div class="hint">仅本机可访问，供其他程序调用当前已加载的模型</div>
+    </div>
+
     <!-- 底部状态文本（阶段5补齐该节点，供 app.js 的 setStatus 使用） -->
     <div id="status"></div>
   </aside>

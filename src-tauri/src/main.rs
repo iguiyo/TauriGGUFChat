@@ -35,6 +35,14 @@ fn main() {
     log::info!("TauriGGUFChat starting (stage 5)");
 
     tauri::Builder::default()
+        // 单实例插件必须最先注册：第二个进程启动时直接唤起已有窗口并退出。
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         // 文件选择对话框插件。
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -68,8 +76,12 @@ fn main() {
             // 注入共享状态。
             app.manage(AppState::new(data_dir.clone()));
 
-            // 启动本地 OpenAI 兼容 HTTP API（127.0.0.1:18080）。
-            api_server::spawn(app.handle().clone());
+            // 本地 API 控制状态；默认随程序启动开启（可在界面里关闭/再开启）。
+            let api_control = api_server::ApiControl::new();
+            if let Err(e) = api_control.start(app.handle().clone()) {
+                log::warn!("本地 API 启动失败: {}", e);
+            }
+            app.manage(api_control);
 
             log::info!("TauriGGUFChat initialized, base_dir = {:?}", data_dir);
             Ok(())
@@ -90,6 +102,10 @@ fn main() {
             commands::save_session,
             commands::load_session,
             commands::delete_session,
+            // 本地 API 开关
+            api_server::api_status,
+            api_server::start_api,
+            api_server::stop_api,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

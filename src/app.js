@@ -33,6 +33,10 @@ const statusEl = document.getElementById("status");
 const overlay = document.getElementById("busy-overlay");
 const sessionListEl = document.getElementById("session-list");
 const btnNewSession = document.getElementById("btn-new-session");
+// 本地 API 控制区
+const apiStateEl = document.getElementById("api-state");
+const btnApiToggle = document.getElementById("btn-api-toggle");
+const apiBaseUrlEl = document.getElementById("api-base-url");
 
 // ---- 运行时状态 ----
 // 本地对话消息数组：user / assistant 交替，作为每轮推理的上下文。
@@ -456,6 +460,43 @@ chatInput.addEventListener("keydown", (e) => {
   }
 });
 
+// ===== 本地 API 开关 =====
+
+/** 根据后端返回的状态刷新 API 区域显示。 */
+function renderApiStatus(s) {
+  if (!s) return;
+  apiStateEl.textContent = s.running ? "运行中" : "已关闭";
+  apiStateEl.classList.toggle("on", !!s.running);
+  apiStateEl.classList.toggle("off", !s.running);
+  btnApiToggle.textContent = s.running ? "关闭 API" : "开启 API";
+  apiBaseUrlEl.textContent = s.base_url;
+}
+
+/** 查询一次 API 状态（初始化与开关后调用）。 */
+async function refreshApiStatus() {
+  try {
+    renderApiStatus(await invoke("api_status"));
+  } catch (e) {
+    setStatus("获取 API 状态失败：" + e);
+  }
+}
+
+// 开启 / 关闭本地 API。
+btnApiToggle.addEventListener("click", async () => {
+  btnApiToggle.disabled = true;
+  try {
+    const current = await invoke("api_status");
+    const s = current.running ? await invoke("stop_api") : await invoke("start_api");
+    renderApiStatus(s);
+    setStatus(s.running ? "本地 API 已开启" : "本地 API 已关闭");
+  } catch (e) {
+    setStatus("API 操作失败：" + e);
+    await refreshApiStatus();
+  } finally {
+    btnApiToggle.disabled = false;
+  }
+});
+
 // ===== 初始化 =====
 (async function init() {
   try {
@@ -481,6 +522,8 @@ chatInput.addEventListener("keydown", (e) => {
     }
     // 页面初始化即订阅流式事件（必须早于首次发送）。
     listenChatEvents();
+    // 同步本地 API 的当前状态（后端默认在启动时开启）。
+    await refreshApiStatus();
     setStatus("就绪");
   } catch (e) {
     setStatus("初始化失败：" + e);

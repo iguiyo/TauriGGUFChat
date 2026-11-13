@@ -241,6 +241,47 @@ hr {
   line-height: 1.4;
 }
 
+/* ===== 本地 API 控制区 ===== */
+#api-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#api-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.api-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+/* 运行中：绿色 */
+.api-badge.on {
+  color: #3ddc84;
+  border-color: rgba(61, 220, 132, 0.4);
+  background: rgba(61, 220, 132, 0.1);
+}
+
+/* 已关闭：灰色 */
+.api-badge.off {
+  color: var(--text-dim);
+  border-color: rgba(128, 128, 128, 0.35);
+}
+
+#api-base-url {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-all;
+}
+
 /* 加载中覆盖层 */
 #busy-overlay {
   display: none;

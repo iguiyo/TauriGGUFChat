@@ -13,12 +13,11 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
@@ -31,41 +30,147 @@ struct ApiCtx {
     app: AppHandle,
 }
 
-/// 在独立线程中启动 API 服务；端口被占用时仅记录日志，不影响桌面端使用。
-pub fn spawn(app: AppHandle) {
-    let _ = std::thread::Builder::new()
-        .name("local-api".into())
-        .spawn(move || {
-            let rt = match tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
-                Ok(rt) => rt,
-                Err(e) => {
-                    log::error!("本地 API 运行时创建失败: {}", e);
-                    return;
-                }
-            };
-            rt.block_on(async move {
-                let router = Router::new()
-                    .route("/health", get(health))
-                    .route("/v1/models", get(list_models))
-                    .route("/v1/chat/completions", post(chat_completions))
-                    .layer(CorsLayer::permissive())
-                    .with_state(ApiCtx { app });
+/// 本地 API 的运行状态，由 Tauri 管理，供前端「开启/关闭」。
+pub struct ApiControl {
+    /// 关闭信号发送端；Some 表示服务线程存活。
+    shutdown: Mutex<Option<oneshot::Sender<()>>>,
+    running: Arc<AtomicBool>,
+}
 
-                let addr = SocketAddr::from(([127, 0, 0, 1], API_PORT));
-                match tokio::net::TcpListener::bind(addr).await {
-                    Ok(listener) => {
-                        log::info!("本地 API 已启动: http://{}/v1", addr);
-                        if let Err(e) = axum::serve(listener, router).await {
-                            log::error!("本地 API 服务退出: {}", e);
-                        }
+/// 返回给前端的 API 状态。
+#[derive(serde::Serialize)]
+pub struct ApiStatus {
+    pub running: bool,
+    pub port: u16,
+    pub base_url: String,
+}
+
+impl ApiControl {
+    pub fn new() -> Self {
+        Self {
+            shutdown: Mutex::new(None),
+            running: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    fn status(&self) -> ApiStatus {
+        ApiStatus {
+            running: self.running.load(Ordering::SeqCst),
+            port: API_PORT,
+            base_url: format!("http://127.0.0.1:{}/v1", API_PORT),
+        }
+    }
+
+    /// 启动服务。端口占用会立即返回错误，避免界面显示「已开启」但实际没监听。
+    pub fn start(&self, app: AppHandle) -> Result<ApiStatus, String> {
+        if self.running.load(Ordering::SeqCst) {
+            return Err("本地 API 已在运行".to_string());
+        }
+        let std_listener = bind_with_retry()?;
+        let (tx, rx) = oneshot::channel();
+        *self.shutdown.lock().unwrap() = Some(tx);
+        self.running.store(true, Ordering::SeqCst);
+
+        let running = Arc::clone(&self.running);
+        std::thread::Builder::new()
+            .name("local-api".into())
+            .spawn(move || {
+                let rt = match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(rt) => rt,
+                    Err(e) => {
+                        log::error!("本地 API 运行时创建失败: {}", e);
+                        running.store(false, Ordering::SeqCst);
+                        return;
                     }
-                    Err(e) => log::error!("本地 API 端口 {} 监听失败: {}", API_PORT, e),
-                }
-            });
-        });
+                };
+                rt.block_on(async move {
+                    let listener = match tokio::net::TcpListener::from_std(std_listener) {
+                        Ok(l) => l,
+                        Err(e) => {
+                            log::error!("本地 API 监听器创建失败: {}", e);
+                            running.store(false, Ordering::SeqCst);
+                            return;
+                        }
+                    };
+                    log::info!("本地 API 已启动: http://127.0.0.1:{}/v1", API_PORT);
+                    if let Err(e) = axum::serve(listener, build_router(app))
+                        .with_graceful_shutdown(async move {
+                            let _ = rx.await;
+                        })
+                        .await
+                    {
+                        log::error!("本地 API 服务退出: {}", e);
+                    }
+                    running.store(false, Ordering::SeqCst);
+                    log::info!("本地 API 已停止");
+                });
+            })
+            .map_err(|e| format!("启动 API 线程失败: {}", e))?;
+
+        Ok(self.status())
+    }
+
+    /// 停止服务：发出关闭信号，服务线程在完成当前请求后退出。
+    pub fn stop(&self) -> Result<ApiStatus, String> {
+        if !self.running.load(Ordering::SeqCst) {
+            return Err("本地 API 未在运行".to_string());
+        }
+        if let Some(tx) = self.shutdown.lock().unwrap().take() {
+            let _ = tx.send(());
+        }
+        self.running.store(false, Ordering::SeqCst);
+        Ok(self.status())
+    }
+}
+
+/// 绑定 127.0.0.1:API_PORT，带短重试（刚关闭后端口可能尚未释放）。
+fn bind_with_retry() -> Result<std::net::TcpListener, String> {
+    let mut last = String::new();
+    for _ in 0..10 {
+        match std::net::TcpListener::bind(("127.0.0.1", API_PORT)) {
+            Ok(listener) => {
+                listener
+                    .set_nonblocking(true)
+                    .map_err(|e| format!("设置非阻塞失败: {}", e))?;
+                return Ok(listener);
+            }
+            Err(e) => {
+                last = e.to_string();
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
+    }
+    Err(format!("端口 {} 无法监听: {}", API_PORT, last))
+}
+
+fn build_router(app: AppHandle) -> Router {
+    Router::new()
+        .route("/health", get(health))
+        .route("/v1/models", get(list_models))
+        .route("/v1/chat/completions", post(chat_completions))
+        .layer(CorsLayer::permissive())
+        .with_state(ApiCtx { app })
+}
+
+/// 查询本地 API 运行状态。
+#[tauri::command]
+pub fn api_status(ctl: tauri::State<ApiControl>) -> ApiStatus {
+    ctl.status()
+}
+
+/// 开启本地 API。
+#[tauri::command]
+pub fn start_api(app: AppHandle, ctl: tauri::State<ApiControl>) -> Result<ApiStatus, String> {
+    ctl.start(app)
+}
+
+/// 关闭本地 API。
+#[tauri::command]
+pub fn stop_api(ctl: tauri::State<ApiControl>) -> Result<ApiStatus, String> {
+    ctl.stop()
 }
 
 async fn health() -> Response {
