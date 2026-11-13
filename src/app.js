@@ -319,12 +319,17 @@ function listenChatEvents() {
 
 // ===== 按钮绑定 =====
 
-// 导入 GGUF：文件选择对话框（阶段1无需真正文件选择，先调桩）。
+// 导入 GGUF：弹出说明提示，确认后由后端弹出文件选择对话框，
+// 并把所选文件复制一份到软件内部模型库（data_dir/models），源文件可自行删除。
 btnImport.addEventListener("click", async () => {
-  setStatus("导入功能将在阶段2实现…");
+  const agreed = confirm(
+    "导入后模型文件将复制到软件内部模型库，原文件可自行删除。\n\n是否选择 GGUF 文件并导入？"
+  );
+  if (!agreed) return;
+  setStatus("请选择要导入的 GGUF 文件…");
   try {
     const item = await invoke("import_model", { path: "C:/path/to/example.gguf" });
-    setStatus("导入成功：" + item.name);
+    setStatus("导入成功：" + item.name + "（已复制到软件内部模型库，原文件可删除）");
     await refreshModelList();
   } catch (e) {
     setStatus("导入失败：" + e);

@@ -233,6 +233,14 @@ hr {
   min-height: 16px;
 }
 
+/* 模型库位置说明（模型下拉框下方小字） */
+#model-lib-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
 /* 加载中覆盖层 */
 #busy-overlay {
   display: none;
