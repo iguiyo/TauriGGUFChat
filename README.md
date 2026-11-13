@@ -5,7 +5,7 @@
 ## 功能
 
 - 导入本地 GGUF 模型（导入即复制进软件内部模型库，源文件可自行删除）
-- CPU 推理 + 流式输出，可随时停止生成
+- CPU 推理 + 流式输出（另有 CUDA 版可走 GPU），可随时停止生成
 - 多会话管理与自动持久化（切换、删除、按更新时间排序）
 - 推理参数可视化调整（上下文长度、温度、top_p、最大生成长度等）
 - 便携模式：数据保存在程序同目录，拷贝整个文件夹即可迁移
@@ -15,8 +15,8 @@
 ## 使用
 
 1. 从 [Releases](https://github.com/iguiyo/TauriGGUFChat/releases) 下载，两种形式任选：
-   - `TauriGGUFChat-v0.1.3-windows-x64.zip`（推荐，解压即用）
-   - `TauriGGUFChat-v0.1.3-windows-x64.exe`（单文件）
+   - `TauriGGUFChat-v0.1.5-windows-x64.zip`（CPU 版，推荐，解压即用）
+   - `TauriGGUFChat-v0.1.6-cuda-windows-x64.zip`（CUDA 版，需 NVIDIA 显卡）
    放到任意一个有写权限的文件夹
 2. 双击运行（首次启动会在 exe 旁生成 `data\` 目录）
 3. 点击「导入 GGUF」，选择本地模型文件；程序会复制一份到 `data\models\`
@@ -88,9 +88,17 @@ git submodule update --init --depth 1 llama-cpp-sys-2/llama.cpp
 
 ### 可选：CUDA 构建
 
+需要安装 CUDA Toolkit（nvcc + cudart + cublas + nvvm）。若 VS 缺少 CUDA 构建集成，
+可用 Ninja 生成器绕过：
+
 ```bash
-cargo tauri build --features cuda
+set CMAKE_GENERATOR=Ninja
+set CUDAARCHS=86
+cargo build --release --features cuda
 ```
+
+CUDA 版运行时要带上 `cublas64_13.dll` 和 `cublasLt64_13.dll`（与 exe 同目录，发布压缩包里已附带），
+并在参数里把 `n_gpu_layers` 调大于 0 才会真正走 GPU。
 
 ## 技术栈
 
