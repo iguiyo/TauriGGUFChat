@@ -452,8 +452,15 @@ pub(crate) fn run_generation_with_prompt(
     }
 
     // ---- ③ 创建上下文并解码整段 prompt ----
+    // 关键修复：n_batch 必须 >= 提示词 token 数，否则 llama.cpp 内部
+    // `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` 会直接 abort 整个进程
+    // （表现为 ucrtbase.dll 0xc0000409）。默认 n_batch 只有 2048，
+    // 而带 tools 的提示词约 7000 tokens，所以必须显式放大。
+    // llama.cpp 内部会按 n_ubatch 切分计算，显存/内存不会因此暴涨。
     let backend = backend()?;
-    let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(n_ctx));
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(NonZeroU32::new(n_ctx))
+        .with_n_batch(n_ctx);
     let mut ctx = model
         .new_context(backend, ctx_params)
         .map_err(|e| format!("创建推理上下文失败: {}", e))?;
