@@ -17,7 +17,7 @@
 
 1. 从 [Releases](https://github.com/iguiyo/TauriGGUFChat/releases) 下载，两种形式任选：
    - `TauriGGUFChat-v0.1.7-windows-x64.zip`（CPU 版，推荐，解压即用）
-   - `TauriGGUFChat-v0.1.6-cuda-windows-x64.zip`（CUDA 版，需 NVIDIA 显卡）
+   - `TauriGGUFChat-v0.1.7-cuda-windows-x64.zip`（CUDA 版，需 NVIDIA 显卡；解压后 exe 与两个 cublas DLL 放在同一目录）
    放到任意一个有写权限的文件夹
 2. 双击运行（首次启动会在 exe 旁生成 `data\` 目录）
 3. 点击「导入 GGUF」，选择本地模型文件；程序会复制一份到 `data\models\`
