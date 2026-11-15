@@ -30,6 +30,32 @@ fn resolve_data_dir(app: &tauri::App) -> std::path::PathBuf {
         .expect("无法解析应用数据目录")
 }
 
+/// 退出前卸载已加载的模型。
+/// 进程退出时操作系统本来也会回收内存，但清单文件里的 `loaded` 标记会残留，
+/// 导致下次启动界面显示「已加载」而实际并没有模型；这里统一释放实例并清标记。
+fn unload_on_exit(app: &tauri::AppHandle) {
+    let state = app.state::<AppState>();
+    // 若正在生成，先请求中断，避免卸载时长时间等待推理线程释放模型锁。
+    state
+        .generation_stop_flag
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    let old = state.llama_instance.lock().unwrap().take();
+    let item = state.current_loaded_model.lock().unwrap().take();
+
+    if let Some(item) = item {
+        if let Ok(mut list) = fs_service::read_model_list(&state.base_dir) {
+            if let Some(m) = list.iter_mut().find(|m| m.file_name == item.file_name) {
+                m.loaded = false;
+            }
+            let _ = fs_service::write_model_list(&state.base_dir, &list);
+        }
+    }
+
+    drop(old);
+    log::info!("退出前已卸载模型");
+}
+
 fn main() {
     env_logger::init();
     log::info!("TauriGGUFChat starting (stage 5)");
@@ -103,6 +129,12 @@ fn main() {
             api_server::start_api,
             api_server::stop_api,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // 窗口全部关闭、即将退出时卸载模型（释放实例 + 清掉清单里的 loaded 标记）。
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                unload_on_exit(app);
+            }
+        });
 }

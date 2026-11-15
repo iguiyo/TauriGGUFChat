@@ -10,14 +10,15 @@
 - 多会话管理与自动持久化（切换、删除、按更新时间排序）
 - 推理参数可视化调整（上下文长度、温度、top_p、最大生成长度等）
 - 便携模式：数据保存在程序同目录，拷贝整个文件夹即可迁移
+- 退出时自动卸载已加载模型，释放显存/内存并清除「已加载」标记
 - 单实例运行：重复启动会唤起已打开的窗口
 - 本地 HTTP API：界面上可随时开启/关闭，提供 OpenAI 兼容接口
 
 ## 使用
 
 1. 从 [Releases](https://github.com/iguiyo/TauriGGUFChat/releases) 下载，两种形式任选：
-   - `TauriGGUFChat-v0.1.7-windows-x64.zip`（CPU 版，推荐，解压即用）
-   - `TauriGGUFChat-v0.1.7-cuda-windows-x64.zip`（CUDA 版，需 NVIDIA 显卡；解压后 exe 与两个 cublas DLL 放在同一目录）
+   - `TauriGGUFChat-v0.1.8-windows-x64.zip`（CPU 版，推荐，解压即用）
+   - `TauriGGUFChat-v0.1.8-cuda-windows-x64.zip`（CUDA 版，需 NVIDIA 显卡；解压后 exe 与两个 cublas DLL 放在同一目录）
    放到任意一个有写权限的文件夹
 2. 双击运行（首次启动会在 exe 旁生成 `data\` 目录）
 3. 点击「导入 GGUF」，选择本地模型文件；程序会复制一份到 `data\models\`
