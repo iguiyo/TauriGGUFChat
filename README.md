@@ -6,6 +6,7 @@
 
 - 导入本地 GGUF 模型（导入即复制进软件内部模型库，源文件可自行删除）
 - CPU 推理 + 流式输出（另有 CUDA 版可走 GPU），可随时停止生成
+- 思考过程折叠：模型输出的 `think` 段自动收进可折叠区块（生成时展开，结束后收起，可手动点开）
 - 多会话管理与自动持久化（切换、删除、按更新时间排序）
 - 推理参数可视化调整（上下文长度、温度、top_p、最大生成长度等）
 - 便携模式：数据保存在程序同目录，拷贝整个文件夹即可迁移
@@ -15,7 +16,7 @@
 ## 使用
 
 1. 从 [Releases](https://github.com/iguiyo/TauriGGUFChat/releases) 下载，两种形式任选：
-   - `TauriGGUFChat-v0.1.5-windows-x64.zip`（CPU 版，推荐，解压即用）
+   - `TauriGGUFChat-v0.1.7-windows-x64.zip`（CPU 版，推荐，解压即用）
    - `TauriGGUFChat-v0.1.6-cuda-windows-x64.zip`（CUDA 版，需 NVIDIA 显卡）
    放到任意一个有写权限的文件夹
 2. 双击运行（首次启动会在 exe 旁生成 `data\` 目录）

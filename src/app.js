@@ -100,6 +100,103 @@ function scrollToBottom() {
   chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
+// ===== 思考过程（think 段）折叠 =====
+// Qwen3 等模型输出形如「<标记>think<标记>…<标记>/think<标记>正文」，
+// 这里把思考段拆出来放进可折叠的 <details>，正文照常显示。
+
+/** 是否匹配思考起始标记（<think> / <|think|> 等），命中返回标记结束偏移。 */
+function matchThinkOpen(s) {
+  const m = /^[^A-Za-z0-9][|｜]?(?:think)(?:ing)?/.exec(s);
+  if (!m) return -1;
+  // 标记后必须是分隔符，避免把 "<thinking 乱" 这类正文误判。
+  const next = s[m[0].length];
+  if (next !== undefined && !"><|｜\n\r\t ".includes(next)) return -1;
+  let i = m[0].length;
+  while (i < s.length && (s[i] === ">" || s[i] === "|" || s[i] === "｜")) i++;
+  return i;
+}
+
+/** 开头是否可能是被分片截断的起始标记（例如只收到 "<" 或 "<thi"）。 */
+function isPartialThinkOpen(s) {
+  if (!s) return true;
+  if (/^[A-Za-z0-9]/.test(s)) return false;
+  const rest = s.slice(1).replace(/^[|｜]/, "");
+  if (rest.length >= 8) return false;
+  return /^[a-z]*$/.test(rest) && "thinking".startsWith(rest);
+}
+
+/** 查找闭合标记（</think> / <|/think|> 等），返回 [起点, 终点)。 */
+function findThinkClose(s) {
+  for (let j = 1; j + 6 <= s.length; j++) {
+    if (!s.startsWith("/think", j)) continue;
+    // 标记前的字符必须是分隔符，避免误切正文里的 "/think"。
+    if (/[A-Za-z0-9]/.test(s[j - 1])) continue;
+    let end = j + 6;
+    while (end < s.length && (s[end] === ">" || s[end] === "|" || s[end] === "｜")) end++;
+    return [j - 1, end];
+  }
+  return null;
+}
+
+/** 把整段文本拆成思考段与正文。 */
+function splitThink(text) {
+  const body = text.replace(/^\s+/, "");
+  // 标记可能被 token 切开，长度不够时先不下结论，避免闪烁。
+  if (isPartialThinkOpen(body)) return { think: "", answer: "", hasThink: false };
+  const open = matchThinkOpen(body);
+  if (open < 0) return { think: "", answer: text, hasThink: false };
+  const rest = body.slice(open);
+  const close = findThinkClose(rest);
+  if (!close) {
+    return { think: rest.replace(/^\s+/, ""), answer: "", hasThink: true, closed: false };
+  }
+  return {
+    think: rest.slice(0, close[0]).trim(),
+    answer: rest.slice(close[1]),
+    hasThink: true,
+    closed: true,
+  };
+}
+
+/**
+ * 渲染 AI 气泡：思考段渲染为可折叠块，正文正常显示。
+ * streaming=true 时思考区默认展开，生成结束后自动收起；
+ * 用户手动点开/收起过则不再自动改变状态。
+ */
+function renderAiText(bubble, text, streaming) {
+  const p = splitThink(text);
+  let block = bubble.querySelector(".think-block");
+  let answer = bubble.querySelector(".answer");
+  if (!answer) {
+    answer = document.createElement("div");
+    answer.className = "answer";
+    bubble.appendChild(answer);
+  }
+
+  if (p.hasThink) {
+    if (!block) {
+      block = document.createElement("details");
+      block.className = "think-block";
+      const summary = document.createElement("summary");
+      block.appendChild(summary);
+      const body = document.createElement("div");
+      body.className = "think-body";
+      block.appendChild(body);
+      bubble.insertBefore(block, answer);
+      // 只把用户点击视为「手动切换」（程序改 open 不会触发 click）。
+      summary.addEventListener("click", () => {
+        bubble.dataset.thinkManual = "1";
+      });
+    }
+    const label = !p.closed && streaming ? "思考中…" : "思考过程";
+    block.querySelector("summary").textContent = `${label} （${p.think.length} 字）`;
+    block.querySelector(".think-body").textContent = p.think;
+    if (!bubble.dataset.thinkManual) block.open = streaming || !p.closed;
+  }
+
+  answer.textContent = p.answer;
+}
+
 /** 刷新模型下拉列表。 */
 async function refreshModelList() {
   if (!invoke) { setStatus("未检测到 Tauri 环境"); return; }
@@ -171,7 +268,15 @@ function renderConversation() {
     return;
   }
   conversation.forEach((m) => {
-    appendMessage(m.role === "user" ? "user" : "ai", m.content);
+    if (m.role === "user") {
+      appendMessage("user", m.content);
+    } else {
+      // AI 消息：思考段折叠显示（历史消息默认收起）。
+      const bubble = document.createElement("div");
+      bubble.className = "msg ai";
+      chatHistory.appendChild(bubble);
+      renderAiText(bubble, m.content, false);
+    }
   });
   scrollToBottom();
 }
@@ -276,7 +381,7 @@ function finishGeneration(text, isError) {
     alert("生成失败：" + finalText);
     setStatus("生成失败");
   } else if (currentBubble) {
-    currentBubble.textContent = finalText;
+    renderAiText(currentBubble, finalText, false);
     // 空回复不入历史（例如加载后立刻停止）。
     if (finalText.trim()) {
       conversation.push({ role: "assistant", content: finalText });
@@ -306,7 +411,7 @@ function listenChatEvents() {
         // 逐字追加到当前 AI 气泡并滚动到底。
         if (!currentBubble) return;
         streamedText += payload.content;
-        currentBubble.textContent = streamedText;
+        renderAiText(currentBubble, streamedText, true);
         scrollToBottom();
         break;
       case "end":

@@ -183,6 +183,49 @@ hr {
   animation: blink 1s infinite;
 }
 
+/* 思考过程（可折叠）：生成中展开，结束后收起 */
+.think-block {
+  margin-bottom: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
+.think-block summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.think-block summary::-webkit-details-marker {
+  display: none;
+}
+
+.think-block summary::before {
+  content: "▸ ";
+}
+
+.think-block[open] summary::before {
+  content: "▾ ";
+}
+
+.think-block summary:hover {
+  color: var(--text);
+}
+
+.think-body {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+}
+
+/* 正文与光标同一行 */
+.msg.ai .answer {
+  display: inline;
+}
+
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
